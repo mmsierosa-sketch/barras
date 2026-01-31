@@ -81,17 +81,21 @@ button:hover {
 <button onclick="resetAll()">Resetear lista</button>
 
 <script>
+/* ---------- VARIABLES ---------- */
 const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 const codesDiv = document.getElementById('codes');
 
-let currentVisibleCode = null;
+let currentVisibleCode = null;  // Código actualmente visible
+let lastScanTime = 0;           // Última vez que se sumó
 
+/* ---------- VERIFICAR SOPORTE ---------- */
 if (!('BarcodeDetector' in window)) {
     resultDiv.innerText = "Este navegador no soporta BarcodeDetector";
     throw new Error("BarcodeDetector no soportado");
 }
 
+/* ---------- CONFIGURAR DETECTOR ---------- */
 const detector = new BarcodeDetector({
     formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
 });
@@ -117,12 +121,16 @@ async function scan() {
         const barcodes = await detector.detect(video);
 
         if (barcodes.length === 0) {
-            currentVisibleCode = null;
+            currentVisibleCode = null;  // Código desapareció → listo para nuevo
         } else {
             const code = barcodes[0].rawValue;
+            const now = Date.now();
 
-            if (code !== currentVisibleCode) {
+            // Evitar duplicados: solo contar si es un código nuevo
+            // o si pasó más de 1.5 segundos desde el último escaneo
+            if (code !== currentVisibleCode || (now - lastScanTime > 1500)) {
                 currentVisibleCode = code;
+                lastScanTime = now;
 
                 let count = localStorage.getItem(code) || 0;
                 count++;
@@ -141,7 +149,7 @@ async function scan() {
     requestAnimationFrame(scan);
 }
 
-/* ---------- LISTA ---------- */
+/* ---------- RENDER LISTA ---------- */
 function renderList() {
     codesDiv.innerHTML = "";
 
@@ -160,7 +168,6 @@ function renderList() {
             <span>${code}</span>
             <strong>${count}</strong>
         `;
-
         codesDiv.appendChild(row);
     }
 }
@@ -170,6 +177,7 @@ function resetAll() {
     if (confirm("¿Seguro que quieres borrar todos los códigos?")) {
         localStorage.clear();
         currentVisibleCode = null;
+        lastScanTime = 0;
         resultDiv.innerText = "Esperando código…";
         renderList();
     }
