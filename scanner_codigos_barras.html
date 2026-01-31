@@ -30,6 +30,24 @@ video {
     text-align: center;
     white-space: pre-line;
 }
+#list {
+    margin-top: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+}
+#list h3 {
+    margin-top: 0;
+}
+.code-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px solid #ddd;
+}
+.code-row:last-child {
+    border-bottom: none;
+}
 </style>
 </head>
 
@@ -41,15 +59,18 @@ video {
 
 <div id="result">Esperando código…</div>
 
+<div id="list">
+    <h3>Lista de códigos</h3>
+    <div id="codes"></div>
+</div>
+
 <script>
-/* ---------- CONFIGURACIÓN ---------- */
 const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
+const codesDiv = document.getElementById('codes');
 
-/* Código actualmente visible (para evitar duplicados) */
 let currentVisibleCode = null;
 
-/* Detector nativo del navegador (Chrome Android) */
 if (!('BarcodeDetector' in window)) {
     resultDiv.innerText = "Este navegador no soporta BarcodeDetector";
     throw new Error("BarcodeDetector no soportado");
@@ -59,32 +80,25 @@ const detector = new BarcodeDetector({
     formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
 });
 
-/* ---------- CÁMARA ---------- */
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" }
 })
 .then(stream => {
     video.srcObject = stream;
     video.play();
+    renderList();
     requestAnimationFrame(scan);
-})
-.catch(err => {
-    resultDiv.innerText = "Error al acceder a la cámara";
-    console.error(err);
 });
 
-/* ---------- ESCANEO ---------- */
 async function scan() {
     try {
         const barcodes = await detector.detect(video);
 
         if (barcodes.length === 0) {
-            /* No hay código en pantalla → permitir nuevo escaneo */
             currentVisibleCode = null;
         } else {
             const code = barcodes[0].rawValue;
 
-            /* Solo contar si es un código NUEVO en pantalla */
             if (code !== currentVisibleCode) {
                 currentVisibleCode = code;
 
@@ -94,6 +108,8 @@ async function scan() {
 
                 resultDiv.innerText =
                     `Código: ${code}\nEscaneado: ${count} veces`;
+
+                renderList();
             }
         }
     } catch (e) {
@@ -101,6 +117,30 @@ async function scan() {
     }
 
     requestAnimationFrame(scan);
+}
+
+/* ---------- LISTA ---------- */
+function renderList() {
+    codesDiv.innerHTML = "";
+
+    if (localStorage.length === 0) {
+        codesDiv.innerHTML = "<em>No hay códigos escaneados</em>";
+        return;
+    }
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const code = localStorage.key(i);
+        const count = localStorage.getItem(code);
+
+        const row = document.createElement("div");
+        row.className = "code-row";
+        row.innerHTML = `
+            <span>${code}</span>
+            <strong>${count}</strong>
+        `;
+
+        codesDiv.appendChild(row);
+    }
 }
 </script>
 
