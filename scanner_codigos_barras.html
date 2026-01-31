@@ -2,68 +2,105 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Escáner de Códigos</title>
+<title>Contador de Códigos de Barras</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
-body { font-family: Arial; padding: 16px; background: #f2f2f2; }
-video { width: 100%; max-height: 300px; background: black; }
-#result { margin-top: 16px; padding: 12px; background: white; font-size: 18px; }
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 16px;
+    background: #f2f2f2;
+}
+h1 {
+    text-align: center;
+}
+video {
+    width: 100%;
+    max-height: 300px;
+    background: black;
+    border-radius: 8px;
+}
+#result {
+    margin-top: 16px;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    font-size: 18px;
+    text-align: center;
+    white-space: pre-line;
+}
 </style>
 </head>
+
 <body>
 
-<h2>Escáner de Códigos</h2>
+<h1>Escáner de Códigos</h1>
+
 <video id="video" autoplay playsinline></video>
+
 <div id="result">Esperando código…</div>
 
 <script>
-if (!('BarcodeDetector' in window)) {
-  document.getElementById('result').innerText =
-    "Este navegador no soporta BarcodeDetector";
-  throw new Error("BarcodeDetector no soportado");
-}
-
+/* ---------- CONFIGURACIÓN ---------- */
 const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 
-let lastCode = null;
-let lastTime = 0;
+/* Código actualmente visible (para evitar duplicados) */
+let currentVisibleCode = null;
+
+/* Detector nativo del navegador (Chrome Android) */
+if (!('BarcodeDetector' in window)) {
+    resultDiv.innerText = "Este navegador no soporta BarcodeDetector";
+    throw new Error("BarcodeDetector no soportado");
+}
 
 const detector = new BarcodeDetector({
-  formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
+    formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
 });
 
+/* ---------- CÁMARA ---------- */
 navigator.mediaDevices.getUserMedia({
-  video: { facingMode: "environment" }
-}).then(stream => {
-  video.srcObject = stream;
-  video.play();
-  requestAnimationFrame(scan);
+    video: { facingMode: "environment" }
+})
+.then(stream => {
+    video.srcObject = stream;
+    video.play();
+    requestAnimationFrame(scan);
+})
+.catch(err => {
+    resultDiv.innerText = "Error al acceder a la cámara";
+    console.error(err);
 });
 
+/* ---------- ESCANEO ---------- */
 async function scan() {
-  try {
-    const barcodes = await detector.detect(video);
-    if (barcodes.length > 0) {
-      const code = barcodes[0].rawValue;
-      const now = Date.now();
+    try {
+        const barcodes = await detector.detect(video);
 
-      if (code !== lastCode || now - lastTime > 2000) {
-        lastCode = code;
-        lastTime = now;
+        if (barcodes.length === 0) {
+            /* No hay código en pantalla → permitir nuevo escaneo */
+            currentVisibleCode = null;
+        } else {
+            const code = barcodes[0].rawValue;
 
-        let count = localStorage.getItem(code) || 0;
-        count++;
-        localStorage.setItem(code, count);
+            /* Solo contar si es un código NUEVO en pantalla */
+            if (code !== currentVisibleCode) {
+                currentVisibleCode = code;
 
-        resultDiv.innerText =
-          `Código: ${code}\nEscaneado: ${count} veces`;
-      }
+                let count = localStorage.getItem(code) || 0;
+                count++;
+                localStorage.setItem(code, count);
+
+                resultDiv.innerText =
+                    `Código: ${code}\nEscaneado: ${count} veces`;
+            }
+        }
+    } catch (e) {
+        console.error(e);
     }
-  } catch (e) {
-    console.error(e);
-  }
-  requestAnimationFrame(scan);
+
+    requestAnimationFrame(scan);
 }
 </script>
 
