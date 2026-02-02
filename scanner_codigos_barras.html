@@ -12,9 +12,7 @@ body {
     padding: 16px;
     background: #f2f2f2;
 }
-h1 {
-    text-align: center;
-}
+h1 { text-align: center; }
 video {
     width: 100%;
     max-height: 300px;
@@ -52,14 +50,8 @@ button {
     border-radius: 8px;
     cursor: pointer;
 }
-#exportBtn {
-    background: #2e7d32;
-    color: white;
-}
-#resetBtn {
-    background: #d32f2f;
-    color: white;
-}
+#exportBtn { background: #2e7d32; color: white; }
+#resetBtn { background: #d32f2f; color: white; }
 small { color: #555; }
 </style>
 </head>
@@ -92,8 +84,8 @@ const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 const codesDiv = document.getElementById('codes');
 
-let currentVisibleCode = null;
-let lastScanTime = 0;
+let lastScannedCode = null;   // Último código contado
+let codeLocked = false;      // Bloqueo hasta que desaparezca
 
 /* ---------- SOPORTE ---------- */
 if (!('BarcodeDetector' in window)) {
@@ -116,20 +108,21 @@ navigator.mediaDevices.getUserMedia({
     requestAnimationFrame(scan);
 });
 
-/* ---------- ESCANEO ---------- */
+/* ---------- ESCANEO (ANTI DUPLICADOS REAL) ---------- */
 async function scan() {
     try {
         const barcodes = await detector.detect(video);
 
+        // Si no hay código → desbloquear
         if (barcodes.length === 0) {
-            currentVisibleCode = null;
+            codeLocked = false;
         } else {
             const code = barcodes[0].rawValue;
-            const now = Date.now();
 
-            if (code !== currentVisibleCode || now - lastScanTime > 1500) {
-                currentVisibleCode = code;
-                lastScanTime = now;
+            // SOLO contar si NO está bloqueado
+            if (!codeLocked) {
+                codeLocked = true;
+                lastScannedCode = code;
 
                 let count = localStorage.getItem(code) || 0;
                 count++;
@@ -143,7 +136,10 @@ async function scan() {
                 renderList();
             }
         }
-    } catch {}
+    } catch (e) {
+        console.error(e);
+    }
+
     requestAnimationFrame(scan);
 }
 
@@ -176,14 +172,14 @@ function renderList() {
     }
 }
 
-/* ---------- EXPORTAR EXCEL ---------- */
+/* ---------- EXPORTAR ---------- */
 function exportExcel() {
     if (!localStorage.length) {
         alert("No hay datos para exportar");
         return;
     }
 
-    let csv = "Código;Producto;Precio (€);Cantidad;Total (€)\n";
+    let csv = "Código;Producto;Precio;Cantidad;Total\n";
 
     for (let i = 0; i < localStorage.length; i++) {
         const code = localStorage.key(i);
@@ -195,22 +191,18 @@ function exportExcel() {
     }
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-
     const a = document.createElement("a");
-    a.href = url;
+    a.href = URL.createObjectURL(blob);
     a.download = "productos_escaneados.csv";
     a.click();
-
-    URL.revokeObjectURL(url);
 }
 
 /* ---------- RESET ---------- */
 function resetAll() {
     if (confirm("¿Borrar toda la lista?")) {
         localStorage.clear();
-        currentVisibleCode = null;
-        lastScanTime = 0;
+        codeLocked = false;
+        lastScannedCode = null;
         resultDiv.innerText = "Esperando código…";
         renderList();
     }
