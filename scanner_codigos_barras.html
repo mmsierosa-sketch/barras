@@ -36,32 +36,31 @@ video {
     background: white;
     border-radius: 8px;
 }
-#list h3 {
-    margin-top: 0;
-}
 .code-row {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
     padding: 6px 0;
     border-bottom: 1px solid #ddd;
 }
-.code-row:last-child {
-    border-bottom: none;
-}
 button {
     width: 100%;
-    margin-top: 12px;
+    margin-top: 10px;
     padding: 12px;
     font-size: 16px;
     border: none;
     border-radius: 8px;
-    background: #d32f2f;
-    color: white;
     cursor: pointer;
 }
-button:hover {
-    background: #b71c1c;
+#exportBtn {
+    background: #2e7d32;
+    color: white;
 }
+#resetBtn {
+    background: #d32f2f;
+    color: white;
+}
+small { color: #555; }
 </style>
 </head>
 
@@ -74,28 +73,35 @@ button:hover {
 <div id="result">Esperando código…</div>
 
 <div id="list">
-    <h3>Lista de códigos</h3>
+    <h3>Lista de productos</h3>
     <div id="codes"></div>
 </div>
 
-<button onclick="resetAll()">Resetear lista</button>
+<button id="exportBtn" onclick="exportExcel()">Exportar a Excel</button>
+<button id="resetBtn" onclick="resetAll()">Resetear lista</button>
 
 <script>
+/* ---------- PRODUCTOS ---------- */
+const PRODUCTS = {
+    "2400007217681": { name: "Protector", price: 19.99 },
+    "2400007217735": { name: "Protector", price: 9.99 }
+};
+
 /* ---------- VARIABLES ---------- */
 const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 const codesDiv = document.getElementById('codes');
 
-let currentVisibleCode = null;  // Código actualmente visible
-let lastScanTime = 0;           // Última vez que se sumó
+let currentVisibleCode = null;
+let lastScanTime = 0;
 
-/* ---------- VERIFICAR SOPORTE ---------- */
+/* ---------- SOPORTE ---------- */
 if (!('BarcodeDetector' in window)) {
-    resultDiv.innerText = "Este navegador no soporta BarcodeDetector";
-    throw new Error("BarcodeDetector no soportado");
+    alert("Este navegador no soporta BarcodeDetector");
+    throw new Error("No soportado");
 }
 
-/* ---------- CONFIGURAR DETECTOR ---------- */
+/* ---------- DETECTOR ---------- */
 const detector = new BarcodeDetector({
     formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
 });
@@ -103,16 +109,11 @@ const detector = new BarcodeDetector({
 /* ---------- CÁMARA ---------- */
 navigator.mediaDevices.getUserMedia({
     video: { facingMode: "environment" }
-})
-.then(stream => {
+}).then(stream => {
     video.srcObject = stream;
     video.play();
     renderList();
     requestAnimationFrame(scan);
-})
-.catch(err => {
-    resultDiv.innerText = "Error al acceder a la cámara";
-    console.error(err);
 });
 
 /* ---------- ESCANEO ---------- */
@@ -121,14 +122,12 @@ async function scan() {
         const barcodes = await detector.detect(video);
 
         if (barcodes.length === 0) {
-            currentVisibleCode = null;  // Código desapareció → listo para nuevo
+            currentVisibleCode = null;
         } else {
             const code = barcodes[0].rawValue;
             const now = Date.now();
 
-            // Evitar duplicados: solo contar si es un código nuevo
-            // o si pasó más de 1.5 segundos desde el último escaneo
-            if (code !== currentVisibleCode || (now - lastScanTime > 1500)) {
+            if (code !== currentVisibleCode || now - lastScanTime > 1500) {
                 currentVisibleCode = code;
                 lastScanTime = now;
 
@@ -136,45 +135,79 @@ async function scan() {
                 count++;
                 localStorage.setItem(code, count);
 
-                resultDiv.innerText =
-                    `Código: ${code}\nEscaneado: ${count} veces`;
+                const product = PRODUCTS[code];
+                resultDiv.innerText = product
+                    ? `Producto: ${product.name}\nPrecio: ${product.price.toFixed(2)} €\nCantidad: ${count}`
+                    : `Código: ${code}\nCantidad: ${count}`;
 
                 renderList();
             }
         }
-    } catch (e) {
-        console.error(e);
-    }
-
+    } catch {}
     requestAnimationFrame(scan);
 }
 
-/* ---------- RENDER LISTA ---------- */
+/* ---------- LISTA ---------- */
 function renderList() {
     codesDiv.innerHTML = "";
 
-    if (localStorage.length === 0) {
-        codesDiv.innerHTML = "<em>No hay códigos escaneados</em>";
+    if (!localStorage.length) {
+        codesDiv.innerHTML = "<em>No hay productos escaneados</em>";
         return;
     }
 
     for (let i = 0; i < localStorage.length; i++) {
         const code = localStorage.key(i);
-        const count = localStorage.getItem(code);
+        const count = Number(localStorage.getItem(code));
+        const product = PRODUCTS[code];
 
         const row = document.createElement("div");
         row.className = "code-row";
-        row.innerHTML = `
-            <span>${code}</span>
-            <strong>${count}</strong>
-        `;
+
+        row.innerHTML = product
+            ? `<div><strong>${product.name}</strong><br><small>${code}</small></div>
+               <div>${product.price.toFixed(2)} €</div>
+               <strong>${count}</strong>`
+            : `<div><strong>Desconocido</strong><br><small>${code}</small></div>
+               <div>-</div>
+               <strong>${count}</strong>`;
+
         codesDiv.appendChild(row);
     }
 }
 
+/* ---------- EXPORTAR EXCEL ---------- */
+function exportExcel() {
+    if (!localStorage.length) {
+        alert("No hay datos para exportar");
+        return;
+    }
+
+    let csv = "Código;Producto;Precio (€);Cantidad;Total (€)\n";
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const code = localStorage.key(i);
+        const qty = Number(localStorage.getItem(code));
+        const product = PRODUCTS[code] || { name: "Desconocido", price: 0 };
+        const total = (product.price * qty).toFixed(2);
+
+        csv += `${code};${product.name};${product.price.toFixed(2)};${qty};${total}\n`;
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "productos_escaneados.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
+}
+
 /* ---------- RESET ---------- */
 function resetAll() {
-    if (confirm("¿Seguro que quieres borrar todos los códigos?")) {
+    if (confirm("¿Borrar toda la lista?")) {
         localStorage.clear();
         currentVisibleCode = null;
         lastScanTime = 0;
