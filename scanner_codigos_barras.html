@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Contador de Códigos de Barras</title>
+<title>Escáner Profesional</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
@@ -19,16 +19,7 @@ video {
     background: black;
     border-radius: 8px;
 }
-#result {
-    margin-top: 16px;
-    padding: 12px;
-    background: white;
-    border-radius: 8px;
-    font-size: 18px;
-    text-align: center;
-    white-space: pre-line;
-}
-#list {
+#result, #list {
     margin-top: 16px;
     padding: 12px;
     background: white;
@@ -48,10 +39,11 @@ button {
     font-size: 16px;
     border: none;
     border-radius: 8px;
+    color: white;
     cursor: pointer;
 }
-#exportBtn { background: #2e7d32; color: white; }
-#resetBtn { background: #d32f2f; color: white; }
+#exportBtn { background: #2e7d32; }
+#resetBtn { background: #d32f2f; }
 small { color: #555; }
 </style>
 </head>
@@ -65,7 +57,7 @@ small { color: #555; }
 <div id="result">Esperando código…</div>
 
 <div id="list">
-    <h3>Lista de productos</h3>
+    <h3>Productos</h3>
     <div id="codes"></div>
 </div>
 
@@ -84,16 +76,31 @@ const video = document.getElementById('video');
 const resultDiv = document.getElementById('result');
 const codesDiv = document.getElementById('codes');
 
-let lastScannedCode = null;   // Último código contado
-let codeLocked = false;      // Bloqueo hasta que desaparezca
+let lastCode = null;
+let lockedCode = null;
+let emptyFrames = 0;
+const EMPTY_FRAMES_REQUIRED = 15; // 👈 CLAVE anti-duplicado
+
+/* ---------- SONIDO ---------- */
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function beep() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 900;
+    gain.gain.value = 0.1;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.12);
+}
 
 /* ---------- SOPORTE ---------- */
 if (!('BarcodeDetector' in window)) {
-    alert("Este navegador no soporta BarcodeDetector");
+    alert("BarcodeDetector no soportado");
     throw new Error("No soportado");
 }
 
-/* ---------- DETECTOR ---------- */
 const detector = new BarcodeDetector({
     formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
 });
@@ -108,33 +115,43 @@ navigator.mediaDevices.getUserMedia({
     requestAnimationFrame(scan);
 });
 
-/* ---------- ESCANEO (ANTI DUPLICADOS REAL) ---------- */
+/* ---------- ESCANEO PROFESIONAL ---------- */
 async function scan() {
     try {
         const barcodes = await detector.detect(video);
 
-        // Si no hay código → desbloquear
         if (barcodes.length === 0) {
-            codeLocked = false;
+            emptyFrames++;
+            if (emptyFrames >= EMPTY_FRAMES_REQUIRED) {
+                lockedCode = null; // 🔓 desbloqueo REAL
+            }
         } else {
+            emptyFrames = 0;
             const code = barcodes[0].rawValue;
 
-            // SOLO contar si NO está bloqueado
-            if (!codeLocked) {
-                codeLocked = true;
-                lastScannedCode = code;
-
-                let count = localStorage.getItem(code) || 0;
-                count++;
-                localStorage.setItem(code, count);
-
-                const product = PRODUCTS[code];
-                resultDiv.innerText = product
-                    ? `Producto: ${product.name}\nPrecio: ${product.price.toFixed(2)} €\nCantidad: ${count}`
-                    : `Código: ${code}\nCantidad: ${count}`;
-
-                renderList();
+            // 🔒 Si está bloqueado, ignorar
+            if (lockedCode === code) {
+                requestAnimationFrame(scan);
+                return;
             }
+
+            // ✅ Nuevo código válido
+            lockedCode = code;
+            lastCode = code;
+
+            let count = Number(localStorage.getItem(code) || 0) + 1;
+            localStorage.setItem(code, count);
+
+            // 🔊 feedback
+            beep();
+            if (navigator.vibrate) navigator.vibrate(100);
+
+            const product = PRODUCTS[code];
+            resultDiv.innerText = product
+                ? `Producto: ${product.name}\nPrecio: ${product.price.toFixed(2)} €\nCantidad: ${count}`
+                : `Código: ${code}\nCantidad: ${count}`;
+
+            renderList();
         }
     } catch (e) {
         console.error(e);
@@ -148,61 +165,51 @@ function renderList() {
     codesDiv.innerHTML = "";
 
     if (!localStorage.length) {
-        codesDiv.innerHTML = "<em>No hay productos escaneados</em>";
+        codesDiv.innerHTML = "<em>No hay productos</em>";
         return;
     }
 
     for (let i = 0; i < localStorage.length; i++) {
         const code = localStorage.key(i);
-        const count = Number(localStorage.getItem(code));
+        const qty = Number(localStorage.getItem(code));
         const product = PRODUCTS[code];
 
         const row = document.createElement("div");
         row.className = "code-row";
-
         row.innerHTML = product
             ? `<div><strong>${product.name}</strong><br><small>${code}</small></div>
                <div>${product.price.toFixed(2)} €</div>
-               <strong>${count}</strong>`
+               <strong>${qty}</strong>`
             : `<div><strong>Desconocido</strong><br><small>${code}</small></div>
                <div>-</div>
-               <strong>${count}</strong>`;
-
+               <strong>${qty}</strong>`;
         codesDiv.appendChild(row);
     }
 }
 
 /* ---------- EXPORTAR ---------- */
 function exportExcel() {
-    if (!localStorage.length) {
-        alert("No hay datos para exportar");
-        return;
-    }
-
     let csv = "Código;Producto;Precio;Cantidad;Total\n";
-
     for (let i = 0; i < localStorage.length; i++) {
         const code = localStorage.key(i);
         const qty = Number(localStorage.getItem(code));
-        const product = PRODUCTS[code] || { name: "Desconocido", price: 0 };
-        const total = (product.price * qty).toFixed(2);
-
-        csv += `${code};${product.name};${product.price.toFixed(2)};${qty};${total}\n`;
+        const p = PRODUCTS[code] || { name: "Desconocido", price: 0 };
+        csv += `${code};${p.name};${p.price};${qty};${(p.price * qty).toFixed(2)}\n`;
     }
 
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "productos_escaneados.csv";
+    a.download = "productos.csv";
     a.click();
 }
 
 /* ---------- RESET ---------- */
 function resetAll() {
-    if (confirm("¿Borrar toda la lista?")) {
+    if (confirm("¿Borrar todo?")) {
         localStorage.clear();
-        codeLocked = false;
-        lastScannedCode = null;
+        lockedCode = null;
+        emptyFrames = 0;
         resultDiv.innerText = "Esperando código…";
         renderList();
     }
