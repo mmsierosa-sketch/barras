@@ -1,218 +1,257 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Escáner Profesional</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+<title>Scanner Pro</title>
 
 <style>
+/* ---------- RESET ---------- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, Arial;
+}
+
+/* ---------- APP LAYOUT ---------- */
 body {
-    font-family: Arial;
-    margin: 0;
-    padding: 16px;
-    background: #f2f2f2;
+  background: #111;
+  overflow: hidden;
+  color: white;
 }
-h1 { text-align: center; }
-video {
-    width: 100%;
-    max-height: 300px;
-    background: black;
-    border-radius: 8px;
+
+/* ---------- HEADER ---------- */
+.header {
+  height: 64px;
+  background: #0f8a72;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  font-size: 14px;
 }
-#result, #list {
-    margin-top: 16px;
-    padding: 12px;
-    background: white;
-    border-radius: 8px;
+
+.header div {
+  text-align: center;
+  opacity: .9;
 }
-.code-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr auto;
-    gap: 8px;
-    padding: 6px 0;
-    border-bottom: 1px solid #ddd;
+
+/* ---------- VIDEO FULLSCREEN ---------- */
+#video {
+  position: absolute;
+  top: 64px;
+  left: 0;
+  width: 100%;
+  height: calc(100vh - 64px);
+  object-fit: cover;
 }
-button {
-    width: 100%;
-    margin-top: 10px;
-    padding: 12px;
-    font-size: 16px;
-    border: none;
-    border-radius: 8px;
-    color: white;
-    cursor: pointer;
+
+/* ---------- SCAN FRAME ---------- */
+.scan-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 260px;
+  height: 260px;
+  transform: translate(-50%, -50%);
+  border: 3px solid #ffb74d;
+  border-radius: 12px;
+  box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
 }
-#exportBtn { background: #2e7d32; }
-#resetBtn { background: #d32f2f; }
-small { color: #555; }
+
+/* animación línea */
+.scan-line {
+  position: absolute;
+  width: 100%;
+  height: 3px;
+  background: #ffb74d;
+  animation: scan 2s linear infinite;
+}
+
+@keyframes scan {
+  from { top: 0; }
+  to { top: 100%; }
+}
+
+/* ---------- BOTONES FLOTANTES ---------- */
+.controls {
+  position: absolute;
+  top: 90px;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  font-size: 14px;
+}
+
+.controls button {
+  background: rgba(0,0,0,.6);
+  border: none;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: white;
+}
+
+/* ---------- ZOOM ---------- */
+.zoom {
+  position: absolute;
+  bottom: 25px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 85%;
+}
+
+.zoom input {
+  width: 100%;
+}
+
+/* ---------- RESULT BOX ---------- */
+#result {
+  position: absolute;
+  bottom: 90px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.7);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+}
 </style>
 </head>
 
 <body>
 
-<h1>Escáner de Códigos</h1>
-
-<video id="video" autoplay playsinline></video>
-
-<div id="result">Esperando código…</div>
-
-<div id="list">
-    <h3>Productos</h3>
-    <div id="codes"></div>
+<!-- HEADER -->
+<div class="header">
+  <div>📷<br>Escanear</div>
+  <div>✏️<br>Crear</div>
+  <div>🕘<br>Historial</div>
+  <div>⚙️<br>Config</div>
 </div>
 
-<button id="exportBtn" onclick="exportExcel()">Exportar a Excel</button>
-<button id="resetBtn" onclick="resetAll()">Resetear lista</button>
+<!-- VIDEO -->
+<video id="video" autoplay playsinline></video>
+
+<!-- MARCO -->
+<div class="scan-frame">
+  <div class="scan-line"></div>
+</div>
+
+<!-- BOTONES -->
+<div class="controls">
+  <button onclick="toggleFlash()">🔦 Luz</button>
+  <button onclick="exportExcel()">📤 Exportar</button>
+  <button onclick="resetAll()">🗑 Reset</button>
+</div>
+
+<!-- RESULTADO -->
+<div id="result">Esperando código…</div>
+
+<!-- ZOOM -->
+<div class="zoom">
+  <input type="range" min="1" max="3" step="0.1" value="1" id="zoomSlider">
+</div>
 
 <script>
 /* ---------- PRODUCTOS ---------- */
 const PRODUCTS = {
-    "2400007217681": { name: "Protector", price: 19.99 },
-    "2400007217735": { name: "Protector", price: 9.99 }
+  "2400007217681": { name: "Protector", price: 19.99 },
+  "2400007217735": { name: "Protector", price: 9.99 }
 };
 
-/* ---------- VARIABLES ---------- */
-const video = document.getElementById('video');
-const resultDiv = document.getElementById('result');
-const codesDiv = document.getElementById('codes');
+const video = document.getElementById("video");
+const resultDiv = document.getElementById("result");
+const zoomSlider = document.getElementById("zoomSlider");
 
-let lastCode = null;
 let lockedCode = null;
 let emptyFrames = 0;
-const EMPTY_FRAMES_REQUIRED = 15; // 👈 CLAVE anti-duplicado
+const EMPTY_REQUIRED = 15;
 
-/* ---------- SONIDO ---------- */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function beep() {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = "square";
-    osc.frequency.value = 900;
-    gain.gain.value = 0.1;
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.12);
+/* ---------- BEEP ---------- */
+const ctx = new (window.AudioContext || window.webkitAudioContext)();
+function beep(){
+  const o=ctx.createOscillator();
+  const g=ctx.createGain();
+  o.connect(g); g.connect(ctx.destination);
+  o.frequency.value=900;
+  g.gain.value=.15;
+  o.start(); o.stop(ctx.currentTime+.12);
 }
-
-/* ---------- SOPORTE ---------- */
-if (!('BarcodeDetector' in window)) {
-    alert("BarcodeDetector no soportado");
-    throw new Error("No soportado");
-}
-
-const detector = new BarcodeDetector({
-    formats: ['ean_13', 'ean_8', 'upc_a', 'code_128']
-});
 
 /* ---------- CÁMARA ---------- */
 navigator.mediaDevices.getUserMedia({
-    video: { facingMode: "environment" }
-}).then(stream => {
-    video.srcObject = stream;
-    video.play();
-    renderList();
-    requestAnimationFrame(scan);
+  video:{ facingMode:"environment" }
+}).then(stream=>{
+  video.srcObject=stream;
+  requestAnimationFrame(scan);
 });
 
-/* ---------- ESCANEO PROFESIONAL ---------- */
-async function scan() {
-    try {
-        const barcodes = await detector.detect(video);
+/* ---------- ZOOM ---------- */
+zoomSlider.oninput = () => {
+  video.style.transform = `scale(${zoomSlider.value})`;
+};
 
-        if (barcodes.length === 0) {
-            emptyFrames++;
-            if (emptyFrames >= EMPTY_FRAMES_REQUIRED) {
-                lockedCode = null; // 🔓 desbloqueo REAL
-            }
-        } else {
-            emptyFrames = 0;
-            const code = barcodes[0].rawValue;
+/* ---------- DETECTOR ---------- */
+const detector = new BarcodeDetector();
 
-            // 🔒 Si está bloqueado, ignorar
-            if (lockedCode === code) {
-                requestAnimationFrame(scan);
-                return;
-            }
+/* ---------- SCAN ---------- */
+async function scan(){
+  const codes = await detector.detect(video);
 
-            // ✅ Nuevo código válido
-            lockedCode = code;
-            lastCode = code;
+  if(!codes.length){
+    emptyFrames++;
+    if(emptyFrames>EMPTY_REQUIRED) lockedCode=null;
+  } else {
+    emptyFrames=0;
+    const code=codes[0].rawValue;
 
-            let count = Number(localStorage.getItem(code) || 0) + 1;
-            localStorage.setItem(code, count);
+    if(code!==lockedCode){
+      lockedCode=code;
 
-            // 🔊 feedback
-            beep();
-            if (navigator.vibrate) navigator.vibrate(100);
+      let qty = Number(localStorage.getItem(code)||0)+1;
+      localStorage.setItem(code,qty);
 
-            const product = PRODUCTS[code];
-            resultDiv.innerText = product
-                ? `Producto: ${product.name}\nPrecio: ${product.price.toFixed(2)} €\nCantidad: ${count}`
-                : `Código: ${code}\nCantidad: ${count}`;
+      beep();
+      navigator.vibrate?.(80);
 
-            renderList();
-        }
-    } catch (e) {
-        console.error(e);
+      const p=PRODUCTS[code];
+      resultDiv.innerText=p
+        ? `${p.name} | ${p.price}€ | x${qty}`
+        : `${code} | x${qty}`;
     }
+  }
 
-    requestAnimationFrame(scan);
+  requestAnimationFrame(scan);
 }
 
-/* ---------- LISTA ---------- */
-function renderList() {
-    codesDiv.innerHTML = "";
-
-    if (!localStorage.length) {
-        codesDiv.innerHTML = "<em>No hay productos</em>";
-        return;
-    }
-
-    for (let i = 0; i < localStorage.length; i++) {
-        const code = localStorage.key(i);
-        const qty = Number(localStorage.getItem(code));
-        const product = PRODUCTS[code];
-
-        const row = document.createElement("div");
-        row.className = "code-row";
-        row.innerHTML = product
-            ? `<div><strong>${product.name}</strong><br><small>${code}</small></div>
-               <div>${product.price.toFixed(2)} €</div>
-               <strong>${qty}</strong>`
-            : `<div><strong>Desconocido</strong><br><small>${code}</small></div>
-               <div>-</div>
-               <strong>${qty}</strong>`;
-        codesDiv.appendChild(row);
-    }
-}
-
-/* ---------- EXPORTAR ---------- */
-function exportExcel() {
-    let csv = "Código;Producto;Precio;Cantidad;Total\n";
-    for (let i = 0; i < localStorage.length; i++) {
-        const code = localStorage.key(i);
-        const qty = Number(localStorage.getItem(code));
-        const p = PRODUCTS[code] || { name: "Desconocido", price: 0 };
-        csv += `${code};${p.name};${p.price};${qty};${(p.price * qty).toFixed(2)}\n`;
-    }
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "productos.csv";
-    a.click();
+/* ---------- EXPORT ---------- */
+function exportExcel(){
+  let csv="Codigo;Producto;Precio;Cantidad\n";
+  for(let i=0;i<localStorage.length;i++){
+    const c=localStorage.key(i);
+    const q=localStorage.getItem(c);
+    const p=PRODUCTS[c]||{name:"Desconocido",price:0};
+    csv+=`${c};${p.name};${p.price};${q}\n`;
+  }
+  const blob=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="productos.csv";
+  a.click();
 }
 
 /* ---------- RESET ---------- */
-function resetAll() {
-    if (confirm("¿Borrar todo?")) {
-        localStorage.clear();
-        lockedCode = null;
-        emptyFrames = 0;
-        resultDiv.innerText = "Esperando código…";
-        renderList();
-    }
+function resetAll(){
+  if(confirm("Borrar todo?")){
+    localStorage.clear();
+    lockedCode=null;
+    resultDiv.innerText="Esperando código…";
+  }
+}
+
+/* dummy flash */
+function toggleFlash(){
+  alert("El flash solo funciona en apps nativas, no web.");
 }
 </script>
 
