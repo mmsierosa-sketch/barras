@@ -1,173 +1,116 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Scanner Pro</title>
 
 <style>
-/* ---------- RESET ---------- */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: system-ui, Arial;
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui}
+
+body{
+  background:#000;
+  overflow:hidden;
+  color:#fff;
 }
 
-/* ---------- APP LAYOUT ---------- */
-body {
-  background: #111;
-  overflow: hidden;
-  color: white;
+/* HEADER */
+.header{
+  height:60px;
+  background:#0f8a72;
+  display:flex;
+  justify-content:space-around;
+  align-items:center;
+  font-size:14px;
 }
 
-/* ---------- HEADER ---------- */
-.header {
-  height: 64px;
-  background: #0f8a72;
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  font-size: 14px;
+/* VIDEO */
+video{
+  position:absolute;
+  top:60px;
+  left:0;
+  width:100%;
+  height:calc(100vh - 60px);
+  object-fit:cover;
 }
 
-.header div {
-  text-align: center;
-  opacity: .9;
+/* MARCO ESCANEO */
+.frame{
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:260px;
+  height:260px;
+  transform:translate(-50%,-50%);
+  border:3px solid #ffb74d;
+  border-radius:14px;
+  box-shadow:0 0 0 9999px rgba(0,0,0,.6);
 }
 
-/* ---------- VIDEO FULLSCREEN ---------- */
-#video {
-  position: absolute;
-  top: 64px;
-  left: 0;
-  width: 100%;
-  height: calc(100vh - 64px);
-  object-fit: cover;
+/* RESULTADO */
+#result{
+  position:absolute;
+  bottom:90px;
+  left:50%;
+  transform:translateX(-50%);
+  background:rgba(0,0,0,.7);
+  padding:10px 18px;
+  border-radius:10px;
 }
 
-/* ---------- SCAN FRAME ---------- */
-.scan-frame {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 260px;
-  height: 260px;
-  transform: translate(-50%, -50%);
-  border: 3px solid #ffb74d;
-  border-radius: 12px;
-  box-shadow: 0 0 0 9999px rgba(0,0,0,.55);
+/* BOTONES */
+.buttons{
+  position:absolute;
+  bottom:20px;
+  width:100%;
+  display:flex;
+  gap:10px;
+  justify-content:center;
 }
 
-/* animación línea */
-.scan-line {
-  position: absolute;
-  width: 100%;
-  height: 3px;
-  background: #ffb74d;
-  animation: scan 2s linear infinite;
+button{
+  padding:12px 16px;
+  border:none;
+  border-radius:10px;
+  color:#fff;
+  font-size:14px;
 }
 
-@keyframes scan {
-  from { top: 0; }
-  to { top: 100%; }
-}
-
-/* ---------- BOTONES FLOTANTES ---------- */
-.controls {
-  position: absolute;
-  top: 90px;
-  width: 100%;
-  display: flex;
-  justify-content: space-around;
-  font-size: 14px;
-}
-
-.controls button {
-  background: rgba(0,0,0,.6);
-  border: none;
-  padding: 10px 14px;
-  border-radius: 10px;
-  color: white;
-}
-
-/* ---------- ZOOM ---------- */
-.zoom {
-  position: absolute;
-  bottom: 25px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 85%;
-}
-
-.zoom input {
-  width: 100%;
-}
-
-/* ---------- RESULT BOX ---------- */
-#result {
-  position: absolute;
-  bottom: 90px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,.7);
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-size: 14px;
-}
+.export{background:#2e7d32}
+.reset{background:#d32f2f}
 </style>
 </head>
 
 <body>
 
-<!-- HEADER -->
 <div class="header">
-  <div>📷<br>Escanear</div>
-  <div>✏️<br>Crear</div>
-  <div>🕘<br>Historial</div>
-  <div>⚙️<br>Config</div>
+  <div>📷 Escanear</div>
+  <div>📦 Inventario</div>
+  <div>⚙ Config</div>
 </div>
 
-<!-- VIDEO -->
 <video id="video" autoplay playsinline></video>
+<div class="frame"></div>
 
-<!-- MARCO -->
-<div class="scan-frame">
-  <div class="scan-line"></div>
-</div>
-
-<!-- BOTONES -->
-<div class="controls">
-  <button onclick="toggleFlash()">🔦 Luz</button>
-  <button onclick="exportExcel()">📤 Exportar</button>
-  <button onclick="resetAll()">🗑 Reset</button>
-</div>
-
-<!-- RESULTADO -->
 <div id="result">Esperando código…</div>
 
-<!-- ZOOM -->
-<div class="zoom">
-  <input type="range" min="1" max="3" step="0.1" value="1" id="zoomSlider">
+<div class="buttons">
+  <button class="export" onclick="exportExcel()">Exportar Excel</button>
+  <button class="reset" onclick="resetAll()">Reset</button>
 </div>
 
 <script>
-/* ---------- PRODUCTOS ---------- */
+/* ========= PRODUCTOS ========= */
 const PRODUCTS = {
-  "2400007217681": { name: "Protector", price: 19.99 },
-  "2400007217735": { name: "Protector", price: 9.99 }
+  "2400007217681": { name:"Protector", price:19.99 },
+  "2400007217735": { name:"Protector", price:9.99 }
 };
 
 const video = document.getElementById("video");
 const resultDiv = document.getElementById("result");
-const zoomSlider = document.getElementById("zoomSlider");
 
-let lockedCode = null;
-let emptyFrames = 0;
-const EMPTY_REQUIRED = 15;
-
-/* ---------- BEEP ---------- */
+/* ========= SONIDO ========= */
 const ctx = new (window.AudioContext || window.webkitAudioContext)();
 function beep(){
   const o=ctx.createOscillator();
@@ -175,10 +118,24 @@ function beep(){
   o.connect(g); g.connect(ctx.destination);
   o.frequency.value=900;
   g.gain.value=.15;
-  o.start(); o.stop(ctx.currentTime+.12);
+  o.start();
+  o.stop(ctx.currentTime+0.12);
 }
 
-/* ---------- CÁMARA ---------- */
+/* ========= VARIABLES ANTI-DUPLICADO ========= */
+let lockedCode=null;
+let emptyFrames=0;
+const EMPTY_REQUIRED=12;
+
+/* ========= SOPORTE ========= */
+if(!("BarcodeDetector" in window)){
+  alert("Tu navegador no soporta BarcodeDetector.\nUsa Chrome Android.");
+  throw new Error("No soportado");
+}
+
+const detector = new BarcodeDetector();
+
+/* ========= CÁMARA ========= */
 navigator.mediaDevices.getUserMedia({
   video:{ facingMode:"environment" }
 }).then(stream=>{
@@ -186,72 +143,66 @@ navigator.mediaDevices.getUserMedia({
   requestAnimationFrame(scan);
 });
 
-/* ---------- ZOOM ---------- */
-zoomSlider.oninput = () => {
-  video.style.transform = `scale(${zoomSlider.value})`;
-};
-
-/* ---------- DETECTOR ---------- */
-const detector = new BarcodeDetector();
-
-/* ---------- SCAN ---------- */
+/* ========= ESCANEO ESTABLE ========= */
 async function scan(){
-  const codes = await detector.detect(video);
+  try{
+    const codes = await detector.detect(video);
 
-  if(!codes.length){
-    emptyFrames++;
-    if(emptyFrames>EMPTY_REQUIRED) lockedCode=null;
-  } else {
-    emptyFrames=0;
-    const code=codes[0].rawValue;
-
-    if(code!==lockedCode){
-      lockedCode=code;
-
-      let qty = Number(localStorage.getItem(code)||0)+1;
-      localStorage.setItem(code,qty);
-
-      beep();
-      navigator.vibrate?.(80);
-
-      const p=PRODUCTS[code];
-      resultDiv.innerText=p
-        ? `${p.name} | ${p.price}€ | x${qty}`
-        : `${code} | x${qty}`;
+    if(!codes.length){
+      emptyFrames++;
+      if(emptyFrames>EMPTY_REQUIRED) lockedCode=null;
     }
-  }
+    else{
+      emptyFrames=0;
+
+      const code=codes[0].rawValue;
+
+      if(code!==lockedCode){
+        lockedCode=code;
+
+        let qty = Number(localStorage.getItem(code)||0)+1;
+        localStorage.setItem(code,qty);
+
+        beep();
+        navigator.vibrate?.(80);
+
+        const p=PRODUCTS[code];
+        resultDiv.innerText = p
+          ? `${p.name} | ${p.price}€ | x${qty}`
+          : `${code} | x${qty}`;
+      }
+    }
+  }catch(e){}
 
   requestAnimationFrame(scan);
 }
 
-/* ---------- EXPORT ---------- */
+/* ========= EXPORT ========= */
 function exportExcel(){
-  let csv="Codigo;Producto;Precio;Cantidad\n";
+  let csv="Codigo;Producto;Precio;Cantidad;Total\n";
+
   for(let i=0;i<localStorage.length;i++){
     const c=localStorage.key(i);
-    const q=localStorage.getItem(c);
+    const q=Number(localStorage.getItem(c));
     const p=PRODUCTS[c]||{name:"Desconocido",price:0};
-    csv+=`${c};${p.name};${p.price};${q}\n`;
+
+    csv+=`${c};${p.name};${p.price};${q};${(p.price*q).toFixed(2)}\n`;
   }
+
   const blob=new Blob([csv],{type:"text/csv"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="productos.csv";
+  a.download="inventario.csv";
   a.click();
 }
 
-/* ---------- RESET ---------- */
+/* ========= RESET ========= */
 function resetAll(){
   if(confirm("Borrar todo?")){
     localStorage.clear();
     lockedCode=null;
     resultDiv.innerText="Esperando código…";
   }
-}
-
-/* dummy flash */
-function toggleFlash(){
-  alert("El flash solo funciona en apps nativas, no web.");
 }
 </script>
 
